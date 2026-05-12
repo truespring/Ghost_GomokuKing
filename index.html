@@ -5,10 +5,39 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | MiddleProject</title>
     <style>
-      /* 전체 화면을 꽉 채우고 스크롤바를 제거합니다. */
-      body { margin: 0; padding: 0; overflow: hidden; background: #231F20; }
-      #unity-container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
-      #unity-canvas { width: 100%; height: 100%; background: #231F20; }
+      /* 전체 페이지 설정 */
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        overflow: hidden;
+        background: #231F20;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /*
+        800x600 (4:3) 비율을 유지하면서 화면에 꽉 맞게 스케일합니다.
+        - aspect-ratio로 4:3 비율 고정
+        - width/height를 vw/vh 중 더 작은 쪽에 맞춤
+        - 남는 공간은 배경색(#231F20)으로 채워짐
+      */
+      #unity-container {
+        position: relative;
+        /* 4:3 비율 유지 */
+        aspect-ratio: 4 / 3;
+        /* 화면 너비와 높이 중 비율에 맞는 쪽에 맞춤 */
+        width: min(100vw, calc(100vh * 4 / 3));
+        height: min(100vh, calc(100vw * 3 / 4));
+      }
+
+      #unity-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #231F20;
+      }
     </style>
   </head>
   <body>
@@ -20,22 +49,6 @@
     <script>
       const canvas = document.querySelector("#unity-canvas");
 
-      // 가로세로 비율 유지 여부에 따라 설정을 선택하세요.
-      // 1. 비율을 무시하고 꽉 채우려면 아래 함수를 그대로 둡니다.
-      // 2. 16:12(4:3) 비율을 유지하고 싶다면 CSS에서 aspect-ratio를 활용하세요.
-      function resizeCanvas() {
-        // 모바일 여부 확인
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-          var meta = document.createElement('meta');
-          meta.name = 'viewport';
-          meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-          document.getElementsByTagName('head')[0].appendChild(meta);
-        }
-      }
-
-      window.addEventListener('resize', resizeCanvas);
-      resizeCanvas();
-
       createUnityInstance(canvas, {
         arguments: [],
         dataUrl: "Build/WebGL Builds.data.unityweb",
@@ -45,8 +58,7 @@
         companyName: "DefaultCompany",
         productName: "MiddleProject",
         productVersion: "1.0",
-        // 아래 설정을 활성화하면 캔버스 크기가 조절될 때 렌더링 해상도도 함께 조절됩니다.
-        devicePixelRatio: window.devicePixelRatio || 1,
+        devicePixelRatio: 1,
       }).then((unityInstance) => {
         // 필요한 경우 추가 로직
       }).catch((message) => {
