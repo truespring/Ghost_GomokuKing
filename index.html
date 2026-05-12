@@ -5,7 +5,6 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | MiddleProject</title>
     <style>
-      /* 전체 페이지 설정 */
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         overflow: hidden;
@@ -16,27 +15,33 @@
         align-items: center;
         justify-content: center;
       }
-
-      /*
-        800x600 (4:3) 비율을 유지하면서 화면에 꽉 맞게 스케일합니다.
-        - aspect-ratio로 4:3 비율 고정
-        - width/height를 vw/vh 중 더 작은 쪽에 맞춤
-        - 남는 공간은 배경색(#231F20)으로 채워짐
-      */
       #unity-container {
         position: relative;
-        /* 4:3 비율 유지 */
         aspect-ratio: 4 / 3;
-        /* 화면 너비와 높이 중 비율에 맞는 쪽에 맞춤 */
         width: min(100vw, calc(100vh * 4 / 3));
         height: min(100vh, calc(100vw * 3 / 4));
       }
-
       #unity-canvas {
         width: 100%;
         height: 100%;
         display: block;
         background: #231F20;
+      }
+
+      /* ── IME 조합용 숨김 input ── */
+      #ime-input {
+        position: fixed;
+        opacity: 0;
+        pointer-events: none;
+        width: 1px;
+        height: 1px;
+        top: 0;
+        left: 0;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: transparent;
+        caret-color: transparent;
       }
     </style>
   </head>
@@ -45,10 +50,112 @@
       <canvas id="unity-canvas" tabindex="-1"></canvas>
     </div>
 
+    <!--
+      한글 IME 조합을 위한 숨김 input 엘리먼트입니다.
+      Unity WebGL은 IME compositionupdate 이벤트를 처리하지 못해
+      초성만 입력되고 모음이 씹히는 현상이 발생합니다.
+      이 input이 IME 조합을 대신 받아서 Unity canvas로 keydown 이벤트를 전달합니다.
+    -->
+    <input id="ime-input" type="text" autocomplete="off" autocorrect="off"
+           autocapitalize="off" spellcheck="false" />
+
     <script src="Build/WebGL Builds.loader.js"></script>
     <script>
-      const canvas = document.querySelector("#unity-canvas");
+      const canvas   = document.querySelector("#unity-canvas");
+      const imeInput = document.querySelector("#ime-input");
 
+      // ── IME 한글 입력 패치 ─────────────────────────────────────────
+      //
+      // 동작 원리:
+      //   1. Unity canvas가 포커스를 받으면 imeInput도 동시에 포커스를 가져옵니다.
+      //   2. 사용자가 키를 누르면 imeInput이 IME 조합을 처리합니다.
+      //   3. compositionend(조합 완료) 시점에 완성된 글자를 Unity에 keydown으로 전달합니다.
+      //   4. 비IME 키(영문, 숫자, 특수키)는 imeInput의 keydown 이벤트를 canvas로 그대로 전달합니다.
+
+      let isComposing = false;
+      let lastCompositionData = '';
+
+      // canvas 클릭 시 imeInput에 포커스 (IME 수신 준비)
+      canvas.addEventListener('click', () => {
+        imeInput.value = '';
+        imeInput.focus();
+      });
+
+      // imeInput이 포커스를 잃으면 canvas로 복귀
+      imeInput.addEventListener('blur', (e) => {
+        // Unity 내부 UI 전환 등으로 blur가 발생하면 즉시 재포커스
+        // (단, 다른 HTML 엘리먼트를 클릭한 경우는 제외)
+        if (e.relatedTarget === null || e.relatedTarget === canvas) {
+          setTimeout(() => imeInput.focus(), 0);
+        }
+      });
+
+      // IME 조합 시작
+      imeInput.addEventListener('compositionstart', () => {
+        isComposing = true;
+        lastCompositionData = '';
+      });
+
+      // IME 조합 중 (글자가 바뀔 때마다)
+      imeInput.addEventListener('compositionupdate', (e) => {
+        lastCompositionData = e.data;
+      });
+
+      // IME 조합 완료 → 완성된 글자를 Unity에 전달
+      imeInput.addEventListener('compositionend', (e) => {
+        isComposing = false;
+        const composed = e.data || lastCompositionData;
+        if (composed) {
+          // 완성된 글자 각각을 keydown 이벤트로 canvas에 전달
+          for (const char of composed) {
+            canvas.dispatchEvent(new KeyboardEvent('keydown', {
+              key: char,
+              code: 'IntlBackslash',
+              bubbles: true,
+              cancelable: true,
+            }));
+          }
+        }
+        // 조합 버퍼 초기화
+        imeInput.value = '';
+        lastCompositionData = '';
+      });
+
+      // 비IME 키 (영문, 숫자, Backspace, Enter 등) → canvas에 그대로 전달
+      imeInput.addEventListener('keydown', (e) => {
+        if (isComposing) return; // IME 조합 중에는 compositionend에서 처리
+
+        // Backspace, Enter, 방향키 등 제어 키만 canvas로 전달
+        // (일반 문자는 Unity의 자체 keydown 핸들러가 처리)
+        const controlKeys = [
+          'Backspace', 'Delete', 'Enter', 'Tab', 'Escape',
+          'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+          'Home', 'End', 'PageUp', 'PageDown'
+        ];
+
+        const clonedEvent = new KeyboardEvent('keydown', {
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          which: e.which,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          metaKey: e.metaKey,
+          bubbles: true,
+          cancelable: true,
+        });
+
+        if (controlKeys.includes(e.key) || e.ctrlKey || e.metaKey) {
+          canvas.dispatchEvent(clonedEvent);
+          e.preventDefault(); // imeInput 자체의 기본 동작 방지
+        } else {
+          // 영문/숫자는 Unity canvas의 기본 keydown으로 처리되므로 그대로 전달
+          canvas.dispatchEvent(clonedEvent);
+        }
+      });
+
+      // ── Unity 인스턴스 생성 ────────────────────────────────────────
       createUnityInstance(canvas, {
         arguments: [],
         dataUrl: "Build/WebGL Builds.data.unityweb",
@@ -60,7 +167,8 @@
         productVersion: "1.0",
         devicePixelRatio: 1,
       }).then((unityInstance) => {
-        // 필요한 경우 추가 로직
+        // Unity 로드 완료 후 canvas 클릭 이벤트 활성화
+        console.log("[Unity] Instance created.");
       }).catch((message) => {
         alert(message);
       });
