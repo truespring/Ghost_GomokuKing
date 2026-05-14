@@ -112,9 +112,30 @@
         imeSink.value = '';
       });
 
+      // 붙여넣기 이벤트 직접 처리 (가장 안정적)
+      imeSink.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+        if (text && window.unityInstance) {
+          window.unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveClipboardText', text);
+        }
+      });
+
       // Backspace / Enter / 방향키 등 제어키는 canvas로 전달합니다.
       // 한글 조합 중에는 전달하지 않습니다 (compositionend가 처리).
       imeSink.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+           e.preventDefault();
+           if (navigator.clipboard?.readText) {
+             navigator.clipboard.readText().then((text) => {
+               if (text && window.unityInstance) {
+                 window.unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveClipboardText', text);
+               }
+             });
+           }
+           return;
+         }
+
         if (isComposing) return;
 
         const controlKeys = [
@@ -160,6 +181,12 @@
         console.log("[Unity] Instance ready. IME sink activated.");
       }).catch((message) => {
         alert(message);
+      });
+
+      createUnityInstance(canvas, {/* ... */}).then((instance) => {
+        unityInstance = instance;
+        window.unityInstance = instance; // 중요: 전역 노출
+        imeSink.focus();
       });
 
     </script>
