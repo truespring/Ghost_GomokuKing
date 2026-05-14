@@ -1,194 +1,173 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
+<head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | MiddleProject</title>
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        overflow: hidden;
-        background: #231F20;
-        width: 100vw;
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #unity-container {
-        position: relative;
-        aspect-ratio: 4 / 3;
-        width: min(100vw, calc(100vh * 4 / 3));
-        height: min(100vh, calc(100vw * 3 / 4));
-      }
-      #unity-canvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-        background: #231F20;
-      }
-
-      /*
-        IME 조합을 받아내는 숨김 textarea입니다.
-        opacity:0 + pointer-events:none 으로 완전히 숨기되,
-        실제 DOM에 존재해야 IME가 붙습니다.
-        input 대신 textarea를 사용하면 한글 조합이 더 안정적입니다.
-      */
-      #ime-sink {
-        position: fixed;
-        left: -9999px;
-        top: -9999px;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-        border: none;
-        outline: none;
-        resize: none;
-        background: transparent;
-        color: transparent;
-        caret-color: transparent;
-        font-size: 1px;
-        overflow: hidden;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="unity-container">
-      <canvas id="unity-canvas" tabindex="-1"></canvas>
-    </div>
-
-    <!-- IME 조합 전용 숨김 textarea -->
-    <textarea id="ime-sink" autocomplete="off" autocorrect="off"
-              autocapitalize="off" spellcheck="false" rows="1"></textarea>
-
-    <script src="Build/WebGL Builds.loader.js"></script>
-    <script>
-      const canvas  = document.querySelector("#unity-canvas");
-      const imeSink = document.querySelector("#ime-sink");
-      let unityInstance = null;
-
-      // ── IME 한글 입력 패치 ──────────────────────────────────────────
-      //
-      // 핵심 원칙:
-      //   - 영문/숫자/특수키: Unity 기본 입력 처리 (canvas keydown) 그대로 둡니다.
-      //   - 한글(IME 조합): imeSink가 조합을 받아 compositionend 시 Unity SendMessage로 전달합니다.
-      //   - keydown 이벤트를 재전달하지 않아 자음 씹힘/중복 입력 문제를 방지합니다.
-
-      let isComposing = false;
-
-      // canvas가 포커스를 받으면 imeSink도 포커스 (IME 수신 준비)
-      // Unity InputField 클릭 → canvas click → imeSink focus 순서로 진행됩니다.
-      canvas.addEventListener('mousedown', () => {
-        // 마우스 버튼을 누른 직후 imeSink에 포커스를 넘깁니다.
-        // setTimeout 0으로 Unity의 mousedown 처리가 먼저 끝나도록 양보합니다.
-        setTimeout(() => {
-          imeSink.value = '';
-          imeSink.focus();
-        }, 0);
-      });
-
-      // imeSink가 포커스를 잃으면 다시 가져옵니다.
-      // (단, 사용자가 페이지 밖을 클릭한 경우는 제외)
-      imeSink.addEventListener('blur', () => {
-        if (document.activeElement !== canvas) {
-          setTimeout(() => imeSink.focus(), 10);
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
-      });
 
-      // IME 조합 시작 (한글 첫 자음 입력 시점)
-      imeSink.addEventListener('compositionstart', () => {
+        body {
+            overflow: hidden;
+            background: #231F20;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #unity-container {
+            position: relative;
+            aspect-ratio: 4 / 3;
+            width: min(100vw, calc(100vh * 4 / 3));
+            height: min(100vh, calc(100vw * 3 / 4));
+        }
+
+        #unity-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #231F20;
+        }
+
+        /*
+          IME 조합을 받아내는 숨김 textarea입니다.
+          opacity:0 + pointer-events:none 으로 완전히 숨기되,
+          실제 DOM에 존재해야 IME가 붙습니다.
+          input 대신 textarea를 사용하면 한글 조합이 더 안정적입니다.
+        */
+        #ime-sink {
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            border: none;
+            outline: none;
+            resize: none;
+            background: transparent;
+            color: transparent;
+            caret-color: transparent;
+            font-size: 1px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+</div>
+
+<!-- IME 조합 전용 숨김 textarea -->
+<textarea id="ime-sink" autocomplete="off" autocorrect="off"
+          autocapitalize="off" spellcheck="false" rows="1"></textarea>
+
+<script src="Build/WebGL Builds.loader.js"></script>
+<script>
+    const canvas = document.querySelector("#unity-canvas");
+    const imeSink = document.querySelector("#ime-sink");
+    let unityInstance = null;
+
+    let isComposing = false;
+
+    canvas.addEventListener('mousedown', () => {
+        setTimeout(() => {
+            imeSink.value = '';
+            imeSink.focus();
+        }, 0);
+    });
+
+    imeSink.addEventListener('blur', () => {
+        if (document.activeElement !== canvas) {
+            setTimeout(() => imeSink.focus(), 10);
+        }
+    });
+
+    imeSink.addEventListener('compositionstart', () => {
         isComposing = true;
-      });
+    });
 
-      // IME 조합 완료 (글자가 확정된 시점 — 스페이스, 다음 자모, 엔터 등)
-      imeSink.addEventListener('compositionend', (e) => {
+    imeSink.addEventListener('compositionend', (e) => {
         isComposing = false;
         const composed = e.data;
         if (composed && unityInstance) {
-          // Unity C# WebGLIMEBridge.ReceiveIMEChar()로 완성 문자 전달
-          unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveIMEChar', composed);
+            unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveIMEChar', composed);
         }
-        // 버퍼 초기화 (다음 조합을 위해)
         imeSink.value = '';
-      });
+    });
 
-      // 붙여넣기 이벤트 직접 처리 (가장 안정적)
-      imeSink.addEventListener('paste', (e) => {
-        e.preventDefault();
-        const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-        if (text && window.unityInstance) {
-          window.unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveClipboardText', text);
+    // [수정] 붙여넣기 이벤트 처리 통합
+    imeSink.addEventListener('paste', (e) => {
+        // 기본 동작을 막지 않아야 브라우저가 클립보드 데이터를 가져옵니다.
+        // 혹은 e.clipboardData를 사용하여 직접 추출합니다.
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        if (text && unityInstance) {
+            unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveClipboardText', text);
+            console.log("Pasted text sent to Unity: ", text);
         }
-      });
+        // 인풋 필드에 텍스트가 남지 않도록 초기화
+        setTimeout(() => {
+            imeSink.value = '';
+        }, 0);
+    });
 
-      // Backspace / Enter / 방향키 등 제어키는 canvas로 전달합니다.
-      // 한글 조합 중에는 전달하지 않습니다 (compositionend가 처리).
-      imeSink.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-           e.preventDefault();
-           if (navigator.clipboard?.readText) {
-             navigator.clipboard.readText().then((text) => {
-               if (text && window.unityInstance) {
-                 window.unityInstance.SendMessage('WebGLIMEBridge', 'ReceiveClipboardText', text);
-               }
-             });
-           }
-           return;
-         }
-
+    imeSink.addEventListener('keydown', (e) => {
+        // [수정] Ctrl+V 처리를 keydown에서 하지 않고 paste 이벤트에 맡깁니다.
+        // 제어키만 canvas로 전달
         if (isComposing) return;
 
         const controlKeys = [
-          'Backspace', 'Delete', 'Enter', 'Tab', 'Escape',
-          'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-          'Home', 'End', 'PageUp', 'PageDown',
+            'Backspace', 'Delete', 'Enter', 'Tab', 'Escape',
+            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+            'Home', 'End', 'PageUp', 'PageDown',
         ];
 
         if (controlKeys.includes(e.key) || e.ctrlKey || e.metaKey || e.altKey) {
-          // 제어키를 canvas에 전달합니다.
-          canvas.dispatchEvent(new KeyboardEvent('keydown', {
-            key:        e.key,
-            code:       e.code,
-            keyCode:    e.keyCode,
-            which:      e.which,
-            ctrlKey:    e.ctrlKey,
-            shiftKey:   e.shiftKey,
-            altKey:     e.altKey,
-            metaKey:    e.metaKey,
-            bubbles:    true,
-            cancelable: true,
-          }));
-          e.preventDefault();
+            // Ctrl+V 같은 경우 이벤트가 paste로 넘어가도록 하기 위해
+            // V 키 단독 입력이 아닐 때는 preventDefault를 신중하게 사용해야 합니다.
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+                return; // paste 이벤트가 발생하도록 통과시킵니다.
+            }
+
+            canvas.dispatchEvent(new KeyboardEvent('keydown', {
+                key: e.key,
+                code: e.code,
+                keyCode: e.keyCode,
+                which: e.which,
+                ctrlKey: e.ctrlKey,
+                shiftKey: e.shiftKey,
+                altKey: e.altKey,
+                metaKey: e.metaKey,
+                bubbles: true,
+            }));
+            e.preventDefault();
         }
-        // 영문/숫자 등 일반 문자는 canvas의 기본 keydown으로 처리되므로 별도 전달 불필요
-      });
+    });
 
-      // ── Unity 인스턴스 생성 ────────────────────────────────────────
-      createUnityInstance(canvas, {
-        arguments:          [],
-        dataUrl:            "Build/WebGL Builds.data.unityweb",
-        frameworkUrl:       "Build/WebGL Builds.framework.js.unityweb",
-        codeUrl:            "Build/WebGL Builds.wasm.unityweb",
+    // [수정] 중복된 createUnityInstance 호출 제거 및 통합
+    createUnityInstance(canvas, {
+        dataUrl: "Build/WebGL Builds.data.unityweb",
+        frameworkUrl: "Build/WebGL Builds.framework.js.unityweb",
+        codeUrl: "Build/WebGL Builds.wasm.unityweb",
         streamingAssetsUrl: "StreamingAssets",
-        companyName:        "DefaultCompany",
-        productName:        "MiddleProject",
-        productVersion:     "1.0",
-        devicePixelRatio:   1,
-      }).then((instance) => {
+        companyName: "DefaultCompany",
+        productName: "MiddleProject",
+        productVersion: "1.0",
+        devicePixelRatio: 1,
+    }).then((instance) => {
         unityInstance = instance;
-        // Unity 로드 완료 후 imeSink 초기 포커스
+        window.unityInstance = instance; // 전역 설정
         imeSink.focus();
-        console.log("[Unity] Instance ready. IME sink activated.");
-      }).catch((message) => {
+        console.log("[Unity] Instance ready.");
+    }).catch((message) => {
         alert(message);
-      });
-
-      createUnityInstance(canvas, {/* ... */}).then((instance) => {
-        unityInstance = instance;
-        window.unityInstance = instance; // 중요: 전역 노출
-        imeSink.focus();
-      });
-
-    </script>
-  </body>
+    });
+</script>
+</body>
 </html>
